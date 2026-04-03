@@ -1,0 +1,1 @@
+{"root":["./src/index.ts","./src/test-db.ts","./src/controllers/auth.controller.ts","./src/controllers/task.controller.ts","./src/lib/prisma.ts","./src/middleware/auth.middleware.ts","./src/routes/auth.routes.ts","./src/services/auth.service.ts","./src/services/task.service.ts"],"version":"6.0.2"}
