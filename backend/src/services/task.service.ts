@@ -28,15 +28,17 @@ export const getTasksService = async ({
   status,
   search,
 }: GetTasksOptions) => {
-  const whereClause = {
+  const whereClause: Parameters<typeof Prisma.task.findMany>[0]["where"] = {
     userId,
     ...(status !== undefined ? { status } : {}),
-    ...(search ? { title: { contains: search, mode: "insensitive" as const } } : {}),
+    ...(search
+      ? { title: { contains: search, mode: "insensitive" as const } }
+      : {}),
   };
 
   const skip = (page - 1) * limit;
 
-  const [tasks, total] = await Promise.all([
+  const [tasks, total] = await Prisma.$transaction([
     Prisma.task.findMany({
       where: whereClause,
       skip,
