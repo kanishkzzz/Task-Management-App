@@ -1,5 +1,9 @@
 import { Request, Response } from "express";
-import { createTaskService, updateTaskService } from "../services/task.service";
+import {
+  createTaskService,
+  getTasksService,
+  updateTaskService,
+} from "../services/task.service";
 
 export const createTask = async (req: Request, res: Response) => {
   try {
@@ -20,6 +24,46 @@ export const createTask = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Error creating task:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const getTasks = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.userId;
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.max(1, Number(req.query.limit) || 10);
+    const statusQuery = req.query.status;
+    const search =
+      typeof req.query.search === "string" ? req.query.search.trim() : undefined;
+
+    let status: boolean | undefined;
+    if (typeof statusQuery === "string") {
+      if (statusQuery.toLowerCase() === "true") {
+        status = true;
+      } else if (statusQuery.toLowerCase() === "false") {
+        status = false;
+      } else {
+        return res
+          .status(400)
+          .json({ message: "status must be either true or false" });
+      }
+    }
+
+    const result = await getTasksService({
+      userId,
+      page,
+      limit,
+      ...(status !== undefined ? { status } : {}),
+      ...(search ? { search } : {}),
+    });
+
+    return res.status(200).json({
+      message: "Tasks fetched successfully",
+      ...result,
+    });
+  } catch (error) {
+    console.error("Error fetching tasks:", error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
