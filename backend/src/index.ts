@@ -26,13 +26,22 @@ app.use(express.json({ limit: "1mb" }));
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || env.clientUrls.includes(origin)) {
-        callback(null, true);
-        return;
-      }
+  if (!origin) return callback(null, true);
 
-      callback(new Error(`Origin ${origin} not allowed by CORS`));
-    },
+  const allowed = env.clientUrls.some(url => {
+    try {
+      const allowedHost = new URL(url).hostname;
+      const incomingHost = new URL(origin).hostname;
+      return allowedHost === incomingHost;
+    } catch {
+      return false;
+    }
+  });
+
+  if (allowed) return callback(null, true);
+
+  callback(new Error(`Origin ${origin} not allowed by CORS`));
+},
     credentials: true,
   })
 );
