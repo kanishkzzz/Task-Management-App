@@ -2,6 +2,15 @@ import { NextFunction, Request, Response } from "express";
 import { loginUserService, registerUserService } from "../services/auth.service";
 import { HttpError } from "../middleware/error.middleware";
 
+const authResponse = (
+  message: string,
+  payload: { token: string; user: { id: string; name: string; email: string } }
+) => ({
+  success: true,
+  message,
+  data: payload,
+});
+
 export const registerUser = async (
   req: Request,
   res: Response,
@@ -13,9 +22,11 @@ export const registerUser = async (
     throw new HttpError(400, "All fields are required");
   }
 
-  const user = await registerUserService({ name, email, password });
+  const result = await registerUserService({ name, email, password });
 
-  return res.status(201).json({ message: "User registered successfully", user });
+  return res
+    .status(201)
+    .json(authResponse("User registered successfully", result));
 };
 
 export const loginUser = async (
@@ -38,8 +49,5 @@ export const loginUser = async (
     maxAge: 60 * 60 * 1000,
   });
 
-  return res.status(200).json({
-    message: "Login Successful",
-    ...result,
-  });
+  return res.status(200).json(authResponse("Login successful", result));
 };

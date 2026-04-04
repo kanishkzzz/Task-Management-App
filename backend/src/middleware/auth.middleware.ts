@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import jwt, { JsonWebTokenError } from "jsonwebtoken";
+import jwt, { JsonWebTokenError, JwtPayload } from "jsonwebtoken";
 import { HttpError } from "./error.middleware";
 
 const getTokenFromCookie = (cookieHeader?: string) => {
@@ -15,34 +15,43 @@ const getTokenFromCookie = (cookieHeader?: string) => {
   return tokenCookie?.split("=")[1];
 };
 
+const getTokenFromRequest = (req: Request) => {
+  const authHeader = req.headers.authorization;
+
+  if (authHeader) {
+    return authHeader.startsWith("Bearer ")
+      ? authHeader.split(" ")[1]
+      : authHeader;
+  }
+
+  return getTokenFromCookie(req.headers.cookie);
+};
+
 export const authMiddleware = (
   req: Request,
   _res: Response,
   next: NextFunction
 ) => {
   try {
-    const authHeader = req.headers.authorization;
-    const cookieToken = getTokenFromCookie(req.headers.cookie);
+    const token = getTokenFromRequest(req);
 
-    if (!authHeader && !cookieToken) {
+    if (!token) {
       return next(new HttpError(401, "No token provided"));
     }
 
-    const token = authHeader
-      ? authHeader.startsWith("Bearer ")
-        ? authHeader.split(" ")[1]
-        : authHeader
-      : cookieToken;
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET as string
+    ) as JwtPayload;
 
-    if (!token) {
-      return next(new HttpError(401, "Invalid authorization header"));
+    const userId = decoded.userId;
+
+    if (typeof userId !== "string") {
+      return next(new HttpError(401, "Invalid token payload"));
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as {
-      userId: string;
-    };
+    req.user = { userId };
 
-    (req as any).user = decoded;
     return next();
   } catch (error) {
     if (error instanceof JsonWebTokenError) {

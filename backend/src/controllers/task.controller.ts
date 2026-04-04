@@ -12,7 +12,11 @@ export const createTask = async (
   _next: NextFunction
 ) => {
   const { title, description } = req.body;
-  const userId = (req as any).user.userId;
+  const userId = req.user?.userId;
+
+  if (!userId) {
+    throw new HttpError(401, "Unauthorized");
+  }
 
   if (!title) {
     throw new HttpError(400, "Title is required");
@@ -34,7 +38,12 @@ export const getTasks = async (
   res: Response,
   _next: NextFunction
 ) => {
-  const userId = (req as any).user.userId;
+  const userId = req.user?.userId;
+
+  if (!userId) {
+    throw new HttpError(401, "Unauthorized");
+  }
+
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.max(1, Number(req.query.limit) || 10);
   const statusQuery = req.query.status;
@@ -82,8 +91,12 @@ export const updateTask = async (
   _next: NextFunction
 ) => {
   const { id } = req.params;
-  const userId = (req as any).user.userId;
+  const userId = req.user?.userId;
   const taskId = Array.isArray(id) ? id[0] : id;
+
+  if (!userId) {
+    throw new HttpError(401, "Unauthorized");
+  }
 
   if (!taskId) {
     throw new HttpError(400, "Task id is required");
