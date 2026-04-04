@@ -2,18 +2,30 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./routes/auth.routes";
-import { authMiddleware } from "./middleware/auth.middleware";
 import taskRoutes from "./routes/task.route";
-import { errorMiddleware, notFoundMiddleware } from "./middleware/error.middleware";
-
-const app = express();
+import {
+  errorMiddleware,
+  notFoundMiddleware,
+} from "./middleware/error.middleware";
 
 dotenv.config();
 
-app.use(express.json());
+import { env } from "./config/env";
+
+const app = express();
+
+app.disable("x-powered-by");
+app.use((_, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  next();
+});
+
+app.use(express.json({ limit: "1mb" }));
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: env.clientUrl,
     credentials: true,
   })
 );
@@ -25,16 +37,9 @@ app.get("/", (_req, res) => {
   res.send("Hello World!");
 });
 
-app.get("/protected", authMiddleware, (req, res) => {
-  res.json({
-    message: "You are authenticated",
-    user: (req as any).user,
-  });
-});
-
 app.use(notFoundMiddleware);
 app.use(errorMiddleware);
 
-app.listen(3000, () => {
-  console.log("Server running on port 3000");
+app.listen(env.port, () => {
+  console.log(`Server running on port ${env.port}`);
 });
