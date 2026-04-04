@@ -61,7 +61,7 @@ export default function RegisterPage() {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           required
-          minLength={6}
+          minLength={8}
         />
 
         <button

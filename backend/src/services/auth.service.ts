@@ -1,14 +1,23 @@
 import { Prisma } from "../lib/prisma";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
+import jwt, { SignOptions } from "jsonwebtoken";
 import { env } from "../config/env";
 
+const createJwtOptions = (expiresIn: string): SignOptions => ({
+  issuer: env.jwtIssuer,
+  audience: env.jwtAudience,
+  expiresIn: expiresIn as NonNullable<SignOptions["expiresIn"]>,
+});
+
 const generateAuthToken = (userId: string) =>
-  jwt.sign({ userId }, env.jwtSecret, {
-    expiresIn: "1h",
-    issuer: env.jwtIssuer,
-    audience: env.jwtAudience,
-  });
+  jwt.sign({ userId }, env.jwtSecret, createJwtOptions(env.jwtExpiresIn));
+
+const generateRefreshToken = (userId: string) =>
+  jwt.sign(
+    { userId },
+    env.jwtRefreshSecret,
+    createJwtOptions(env.jwtRefreshExpiresIn)
+  );
 
 const toSafeUser = (user: { id: string; name: string; email: string }) => ({
   id: user.id,
@@ -40,9 +49,11 @@ export const registerUserService = async (data: {
   });
 
   const token = generateAuthToken(user.id);
+  const refreshToken = generateRefreshToken(user.id);
 
   return {
     token,
+    refreshToken,
     user: toSafeUser(user),
   };
 };
@@ -66,9 +77,22 @@ export const loginUserService = async (data: {
   }
 
   const token = generateAuthToken(user.id);
+  const refreshToken = generateRefreshToken(user.id);
 
   return {
     token,
+    refreshToken,
     user: toSafeUser(user),
   };
+};
+
+export const refreshAuthTokenService = async (refreshToken: string) => {
+  const decoded = jwt.verify(refreshToken, env.jwtRefreshSecret, {
+    issuer: env.jwtIssuer,
+    audience: env.jwtAudience,
+  }) as jwt.JwtPayload & { userId: string };
+
+  const token = generateAuthToken(decoded.userId);
+
+  return { token };
 };

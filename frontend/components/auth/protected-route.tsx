@@ -10,23 +10,33 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const router = useRouter();
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated()) {
+    const authenticated = isAuthenticated();
+
+    if (!authenticated) {
+      setAuthorized(false);
+      setIsCheckingAuth(false);
       router.replace('/login');
       return;
     }
 
     setAuthorized(true);
+    setIsCheckingAuth(false);
   }, [router]);
 
-  if (!authorized) {
+  if (isCheckingAuth) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-slate-300">
-        Checking authentication...
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-300">
+        <div className="text-sm">Checking authentication...</div>
       </div>
     );
+  }
+
+  if (!authorized) {
+    return null;
   }
 
   return <>{children}</>;

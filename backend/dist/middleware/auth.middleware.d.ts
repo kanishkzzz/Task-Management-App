@@ -1,3 +1,3 @@
-import { Request, Response, NextFunction } from "express";
-export declare const authMiddleware: (req: Request, res: Response, next: NextFunction) => Response<any, Record<string, any>> | undefined;
+import { NextFunction, Request, Response } from "express";
+export declare const authMiddleware: (req: Request, _res: Response, next: NextFunction) => void;
 //# sourceMappingURL=auth.middleware.d.ts.map

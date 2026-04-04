@@ -32,6 +32,7 @@ type TaskFormState = {
 };
 
 type ApiTasksResponse = {
+  message: string;
   data: {
     tasks: Task[];
     pagination: {
@@ -43,6 +44,11 @@ type ApiTasksResponse = {
       hasPrevPage: boolean;
     };
   };
+};
+
+type TaskMutationResponse = {
+  message: string;
+  task: Task;
 };
 
 const PAGE_SIZE = 6;
@@ -68,11 +74,43 @@ const getTaskStatusLabel = (task: Task) => {
   return 'todo';
 };
 
-export default function DashboardPage() {
+const matchesTaskFilters = (
+  task: Task,
+  searchTerm: string,
+  normalizedStatus: boolean | undefined
+) => {
+  const matchesSearch =
+    searchTerm.length === 0 ||
+    task.title.toLowerCase().includes(searchTerm.toLowerCase());
+
+  const matchesStatus =
+    normalizedStatus === undefined || task.status === normalizedStatus;
+
+  return matchesSearch && matchesStatus;
+};
+
+const reconcileTaskInList = (
+  previousTasks: Task[],
+  nextTask: Task,
+  searchTerm: string,
+  normalizedStatus: boolean | undefined
+) => {
+  const withoutTask = previousTasks.filter((task) => task.id !== nextTask.id);
+
+  if (!matchesTaskFilters(nextTask, searchTerm, normalizedStatus)) {
+    return withoutTask;
+  }
+
+  return [nextTask, ...withoutTask];
+};
+
+function DashboardContent() {
   const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [searchInput, setSearchInput] = useState('');
@@ -99,7 +137,13 @@ export default function DashboardPage() {
 
   const fetchTasks = async (targetPage = 1, shouldAppend = false) => {
     try {
-      setIsLoading(!shouldAppend);
+      setErrorMessage(null);
+      if (shouldAppend) {
+        setIsFetchingMore(true);
+      } else {
+        setIsLoading(true);
+      }
+
       const params: Record<string, string | number | boolean> = {
         page: targetPage,
         limit: PAGE_SIZE,
@@ -110,16 +154,28 @@ export default function DashboardPage() {
 
       const { data } = await api.get<ApiTasksResponse>('/tasks', { params });
 
-      const incomingTasks = data.data.tasks;
-      const mergedTasks = shouldAppend ? [...tasks, ...incomingTasks] : incomingTasks;
+      setTasks((previousTasks) => {
+        if (!shouldAppend) {
+          return data.data.tasks;
+        }
 
-      setTasks(mergedTasks);
+        const existingTaskIds = new Set(previousTasks.map((task) => task.id));
+        const nextTasks = data.data.tasks.filter((task) => !existingTaskIds.has(task.id));
+
+        return [...previousTasks, ...nextTasks];
+      });
       setHasNextPage(data.data.pagination.hasNextPage);
       setPage(targetPage);
     } catch {
-      toast.error('Failed to load tasks.');
+      const message = 'Failed to load tasks.';
+      setErrorMessage(message);
+      if (!shouldAppend) {
+        setTasks([]);
+      }
+      toast.error(message);
     } finally {
       setIsLoading(false);
+      setIsFetchingMore(false);
     }
   };
 
@@ -128,17 +184,7 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, normalizedStatusForQuery]);
 
-  const visibleTasks = useMemo(() => {
-    if (statusFilter === 'in-progress') {
-      return tasks.filter((task) => getTaskStatusLabel(task) === 'in-progress');
-    }
-
-    if (statusFilter === 'todo') {
-      return tasks.filter((task) => getTaskStatusLabel(task) === 'todo');
-    }
-
-    return tasks;
-  }, [statusFilter, tasks]);
+  const visibleTasks = useMemo(() => tasks, [tasks]);
 
   const resetForm = () => setForm({ title: '', description: '' });
 
@@ -172,26 +218,76 @@ export default function DashboardPage() {
       return;
     }
 
+    const trimmedTitle = form.title.trim();
+    const trimmedDescription = form.description.trim();
+
     try {
       setIsSubmitting(true);
 
       if (editingTask) {
-        await api.patch(`/tasks/${editingTask.id}`, {
-          title: form.title,
-          description: form.description,
+        const previousTask = editingTask;
+        const optimisticTask: Task = {
+          ...editingTask,
+          title: trimmedTitle,
+          description: trimmedDescription || null,
+          updatedAt: new Date().toISOString(),
+        };
+
+        setTasks((previous) =>
+          previous.map((task) => (task.id === previousTask.id ? optimisticTask : task))
+        );
+        closeModals();
+
+        const { data } = await api.patch<TaskMutationResponse>(`/tasks/${previousTask.id}`, {
+          title: trimmedTitle,
+          description: trimmedDescription,
         });
+
+        setTasks((previous) =>
+          reconcileTaskInList(previous, data.task, search, normalizedStatusForQuery)
+        );
         toast.success('Task updated.');
       } else {
-        await api.post('/tasks', {
-          title: form.title,
-          description: form.description,
+        const temporaryId = `temp-${Date.now()}`;
+        const optimisticTask: Task = {
+          id: temporaryId,
+          title: trimmedTitle,
+          description: trimmedDescription || null,
+          status: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        const shouldDisplayTask = matchesTaskFilters(
+          optimisticTask,
+          search,
+          normalizedStatusForQuery
+        );
+
+        if (shouldDisplayTask) {
+          setTasks((previous) => [optimisticTask, ...previous].slice(0, PAGE_SIZE));
+        }
+
+        closeModals();
+
+        const { data } = await api.post<TaskMutationResponse>('/tasks', {
+          title: trimmedTitle,
+          description: trimmedDescription,
+        });
+
+        setTasks((previous) => {
+          const withoutOptimistic = previous.filter((task) => task.id !== temporaryId);
+
+          if (!matchesTaskFilters(data.task, search, normalizedStatusForQuery)) {
+            return withoutOptimistic;
+          }
+
+          return [data.task, ...withoutOptimistic].slice(0, PAGE_SIZE);
         });
         toast.success('Task created.');
       }
-
-      closeModals();
-      await fetchTasks(1, false);
     } catch {
+      await fetchTasks(1, false);
       toast.error('Something went wrong while saving your task.');
     } finally {
       setIsSubmitting(false);
@@ -225,7 +321,10 @@ export default function DashboardPage() {
     );
 
     try {
-      await api.patch(`/tasks/${taskId}/toggle`);
+      const { data } = await api.patch<TaskMutationResponse>(`/tasks/${taskId}/toggle`);
+      setTasks((previous) =>
+        reconcileTaskInList(previous, data.task, search, normalizedStatusForQuery)
+      );
     } catch {
       setTasks(snapshot);
       toast.error('Could not update status.');
@@ -233,7 +332,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <ProtectedRoute>
+    <>
       <main className="min-h-screen p-4 md:p-6">
         <div className="mx-auto flex w-full max-w-7xl gap-4 lg:gap-6">
           <aside className="glass-card hidden w-64 shrink-0 rounded-2xl p-5 md:block">
@@ -295,6 +394,10 @@ export default function DashboardPage() {
 
             {isLoading ? (
               <div className="mt-5 text-sm text-slate-300">Loading tasks...</div>
+            ) : errorMessage ? (
+              <div className="mt-5 rounded-2xl border border-rose-400/30 bg-rose-500/10 p-5 text-sm text-rose-100">
+                {errorMessage}
+              </div>
             ) : (
               <>
                 <motion.div
@@ -376,9 +479,10 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       onClick={() => fetchTasks(page + 1, true)}
-                      className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20"
+                      disabled={isFetchingMore}
+                      className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Load More
+                      {isFetchingMore ? 'Loading...' : 'Load More'}
                     </button>
                   </div>
                 )}
@@ -437,6 +541,14 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <ProtectedRoute>
+      <DashboardContent />
     </ProtectedRoute>
   );
 }

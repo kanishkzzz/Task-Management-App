@@ -35,6 +35,8 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authMiddleware = void 0;
 const jsonwebtoken_1 = __importStar(require("jsonwebtoken"));
+const error_middleware_1 = require("./error.middleware");
+const env_1 = require("../config/env");
 const getTokenFromCookie = (cookieHeader) => {
     if (!cookieHeader) {
         return undefined;
@@ -45,30 +47,45 @@ const getTokenFromCookie = (cookieHeader) => {
         .find((cookie) => cookie.startsWith("token="));
     return tokenCookie?.split("=")[1];
 };
-const authMiddleware = (req, res, next) => {
-    try {
-        const authHeader = req.headers.authorization;
-        const cookieToken = getTokenFromCookie(req.headers.cookie);
-        if (!authHeader && !cookieToken) {
-            return res.status(401).json({ message: "No token provided" });
+const getTokenFromRequest = (req) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+        if (!authHeader.startsWith("Bearer ")) {
+            throw new error_middleware_1.HttpError(401, "Malformed authorization header");
         }
-        const token = authHeader
-            ? (authHeader.startsWith("Bearer ")
-                ? authHeader.split(" ")[1]
-                : authHeader)
-            : cookieToken;
+        const token = authHeader.split(" ")[1];
         if (!token) {
-            return res.status(401).json({ message: "Invalid authorization header" });
+            throw new error_middleware_1.HttpError(401, "Token is required");
         }
-        const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
-        req.user = decoded;
-        next();
+        return token;
+    }
+    return getTokenFromCookie(req.headers.cookie);
+};
+const authMiddleware = (req, _res, next) => {
+    try {
+        const token = getTokenFromRequest(req);
+        if (!token) {
+            return next(new error_middleware_1.HttpError(401, "No token provided"));
+        }
+        const decoded = jsonwebtoken_1.default.verify(token, env_1.env.jwtSecret, {
+            issuer: env_1.env.jwtIssuer,
+            audience: env_1.env.jwtAudience,
+        });
+        const userId = decoded.userId;
+        if (typeof userId !== "string") {
+            return next(new error_middleware_1.HttpError(401, "Invalid token payload"));
+        }
+        req.user = { userId };
+        return next();
     }
     catch (error) {
-        if (error instanceof jsonwebtoken_1.JsonWebTokenError) {
-            return res.status(401).json({ message: "Invalid token" });
+        if (error instanceof jsonwebtoken_1.TokenExpiredError) {
+            return next(new error_middleware_1.HttpError(401, "Token expired"));
         }
-        return res.status(500).json({ message: "Internal Server Error" });
+        if (error instanceof jsonwebtoken_1.JsonWebTokenError) {
+            return next(new error_middleware_1.HttpError(401, "Invalid token"));
+        }
+        return next(error);
     }
 };
 exports.authMiddleware = authMiddleware;

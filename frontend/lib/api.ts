@@ -1,12 +1,13 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { tokenStorage } from './storage';
-import { RefreshTokenResponse } from '@/types/auth';
+import { RefreshResponse } from '@/types/auth';
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000/api';
+  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -14,6 +15,7 @@ const api = axios.create({
 
 const refreshClient = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -36,9 +38,16 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalRequest = error.config as RetryableRequestConfig;
+    const originalRequest = error.config as RetryableRequestConfig | undefined;
 
-    if (error.response?.status !== 401 || originalRequest?._retry) {
+    if (
+      error.response?.status !== 401 ||
+      !originalRequest ||
+      originalRequest._retry ||
+      originalRequest.url === '/auth/login' ||
+      originalRequest.url === '/auth/register' ||
+      originalRequest.url === '/auth/refresh'
+    ) {
       return Promise.reject(error);
     }
 
@@ -51,13 +60,13 @@ api.interceptors.response.use(
     try {
       originalRequest._retry = true;
 
-      const { data } = await refreshClient.post<RefreshTokenResponse>(
-        '/auth/refresh',
-        { refreshToken }
-      );
+      const { data } = await refreshClient.post<RefreshResponse>('/auth/refresh', {
+        refreshToken,
+      });
 
-      tokenStorage.setAccessToken(data.accessToken);
-      originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+      tokenStorage.setAccessToken(data.data.accessToken);
+      originalRequest.headers = originalRequest.headers ?? {};
+      originalRequest.headers.Authorization = `Bearer ${data.data.accessToken}`;
 
       return api(originalRequest);
     } catch (refreshError) {

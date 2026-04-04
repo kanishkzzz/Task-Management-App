@@ -1,4 +1,5 @@
 import { Prisma } from "../lib/prisma";
+import { Prisma as PrismaTypes } from "@prisma/client";
 
 type GetTasksOptions = {
   userId: string;
@@ -28,7 +29,7 @@ export const getTasksService = async ({
   status,
   search,
 }: GetTasksOptions) => {
-  const whereClause: Parameters<typeof Prisma.task.findMany>[0]["where"] = {
+  const whereClause: PrismaTypes.TaskWhereInput = {
     userId,
     ...(status !== undefined ? { status } : {}),
     ...(search

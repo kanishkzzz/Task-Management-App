@@ -1,12 +1,12 @@
-import { AuthTokens } from '@/types/auth';
+import { AuthData } from '@/types/auth';
 
 const ACCESS_TOKEN_KEY = 'task_app_access_token';
 const REFRESH_TOKEN_KEY = 'task_app_refresh_token';
 
 export const tokenStorage = {
-  setTokens(tokens: AuthTokens) {
-    localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken);
-    localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
+  setAuth(data: AuthData) {
+    localStorage.setItem(ACCESS_TOKEN_KEY, data.accessToken);
+    localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
   },
   setAccessToken(accessToken: string) {
     localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);

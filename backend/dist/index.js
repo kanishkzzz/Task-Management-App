@@ -7,25 +7,37 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
-const auth_middleware_1 = require("./middleware/auth.middleware");
-const app = (0, express_1.default)();
+const task_route_1 = __importDefault(require("./routes/task.route"));
+const error_middleware_1 = require("./middleware/error.middleware");
 dotenv_1.default.config();
-app.use(express_1.default.json());
+const env_1 = require("./config/env");
+const app = (0, express_1.default)();
+app.disable("x-powered-by");
+app.use((_, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    next();
+});
+app.use(express_1.default.json({ limit: "1mb" }));
 app.use((0, cors_1.default)({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: (origin, callback) => {
+        if (!origin || env_1.env.clientUrls.includes(origin)) {
+            callback(null, true);
+            return;
+        }
+        callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
     credentials: true,
 }));
-app.use('/auth', auth_routes_1.default);
-app.get("/", (req, res) => {
+app.use("/auth", auth_routes_1.default);
+app.use("/tasks", task_route_1.default);
+app.get("/", (_req, res) => {
     res.send("Hello World!");
 });
-app.get('/protected', auth_middleware_1.authMiddleware, (req, res) => {
-    res.json({
-        message: "You are authenticated",
-        user: req.user,
-    });
-});
-app.listen(3000, () => {
-    console.log("Server running on port 3000");
+app.use(error_middleware_1.notFoundMiddleware);
+app.use(error_middleware_1.errorMiddleware);
+app.listen(env_1.env.port, () => {
+    console.log(`Server running on port ${env_1.env.port}`);
 });
 //# sourceMappingURL=index.js.map
