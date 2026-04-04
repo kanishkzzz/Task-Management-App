@@ -60,7 +60,17 @@ export const getTasks = async (req: Request, res: Response) => {
 
     return res.status(200).json({
       message: "Tasks fetched successfully",
-      ...result,
+      data: {
+        tasks: result.tasks,
+        pagination: {
+          total: result.total,
+          page: result.page,
+          limit: result.limit,
+          totalPages: result.totalPages,
+          hasNextPage: result.hasNextPage,
+          hasPrevPage: result.hasPrevPage,
+        },
+      },
     });
   } catch (error) {
     console.error("Error fetching tasks:", error);
