@@ -3,6 +3,7 @@ import {
   createTaskService,
   deleteTaskService,
   getTasksService,
+  toggleTaskStatusService,
   updateTaskService,
 } from "../services/task.service";
 import { HttpError } from "../middleware/error.middleware";
@@ -136,6 +137,31 @@ export const updateTask = async (
 
   return res.status(200).json({
     message: "Task updated successfully",
+    task,
+  });
+};
+
+export const toggleTaskStatus = async (
+  req: Request,
+  res: Response,
+  _next: NextFunction
+) => {
+  const { id } = req.params;
+  const userId = req.user?.userId;
+  const taskId = Array.isArray(id) ? id[0] : id;
+
+  if (!userId) {
+    throw new HttpError(401, "Unauthorized");
+  }
+
+  if (!taskId) {
+    throw new HttpError(400, "Task id is required");
+  }
+
+  const task = await toggleTaskStatusService(taskId, userId);
+
+  return res.status(200).json({
+    message: "Task status toggled successfully",
     task,
   });
 };
