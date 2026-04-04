@@ -1,9 +1,14 @@
 import { Prisma } from "../lib/prisma";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { env } from "../config/env";
 
 const generateAuthToken = (userId: string) =>
-  jwt.sign({ userId }, process.env.JWT_SECRET as string, { expiresIn: "1h" });
+  jwt.sign({ userId }, env.jwtSecret, {
+    expiresIn: "1h",
+    issuer: env.jwtIssuer,
+    audience: env.jwtAudience,
+  });
 
 const toSafeUser = (user: { id: string; name: string; email: string }) => ({
   id: user.id,
@@ -24,7 +29,7 @@ export const registerUserService = async (data: {
     throw new Error("User already exists");
   }
 
-  const hashedPassword = await bcrypt.hash(data.password, 10);
+  const hashedPassword = await bcrypt.hash(data.password, 12);
 
   const user = await Prisma.user.create({
     data: {

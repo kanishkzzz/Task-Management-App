@@ -11,6 +11,9 @@ const authResponse = (
   data: payload,
 });
 
+const isValidEmail = (value: string) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.toLowerCase());
+
 export const registerUser = async (
   req: Request,
   res: Response,
@@ -18,11 +21,34 @@ export const registerUser = async (
 ) => {
   const { name, email, password } = req.body;
 
-  if (!name || !email || !password) {
-    throw new HttpError(400, "All fields are required");
+  if (
+    typeof name !== "string" ||
+    typeof email !== "string" ||
+    typeof password !== "string"
+  ) {
+    throw new HttpError(400, "name, email and password are required");
   }
 
-  const result = await registerUserService({ name, email, password });
+  const normalizedName = name.trim();
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (normalizedName.length < 2 || normalizedName.length > 100) {
+    throw new HttpError(400, "name must be between 2 and 100 characters");
+  }
+
+  if (!isValidEmail(normalizedEmail)) {
+    throw new HttpError(400, "email is invalid");
+  }
+
+  if (password.length < 8 || password.length > 72) {
+    throw new HttpError(400, "password must be between 8 and 72 characters");
+  }
+
+  const result = await registerUserService({
+    name: normalizedName,
+    email: normalizedEmail,
+    password,
+  });
 
   return res
     .status(201)
@@ -36,11 +62,21 @@ export const loginUser = async (
 ) => {
   const { email, password } = req.body;
 
-  if (!email || !password) {
-    throw new HttpError(400, "Email and Password are required");
+  if (typeof email !== "string" || typeof password !== "string") {
+    throw new HttpError(400, "email and password are required");
   }
 
-  const result = await loginUserService({ email, password });
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!isValidEmail(normalizedEmail)) {
+    throw new HttpError(400, "email is invalid");
+  }
+
+  if (password.length < 8 || password.length > 72) {
+    throw new HttpError(400, "password is invalid");
+  }
+
+  const result = await loginUserService({ email: normalizedEmail, password });
 
   res.cookie("token", result.token, {
     httpOnly: true,
