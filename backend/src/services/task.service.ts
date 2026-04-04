@@ -105,3 +105,24 @@ export const deleteTaskService = async (taskId: string, userId: string) => {
     where: { id: taskId },
   });
 };
+
+export const toggleTaskStatusService = async (taskId: string, userId: string) => {
+  const task = await Prisma.task.findUnique({
+    where: { id: taskId },
+  });
+
+  if (!task) {
+    throw new Error("TASK_NOT_FOUND");
+  }
+
+  if (task.userId !== userId) {
+    throw new Error("TASK_FORBIDDEN");
+  }
+
+  return Prisma.task.update({
+    where: { id: taskId },
+    data: {
+      status: !task.status,
+    },
+  });
+};
